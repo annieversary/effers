@@ -1,0 +1,10 @@
+[package]
+name = "effers"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["effers-derive"]
+
+[dependencies]
+effers-derive = { path = "./effers-derive" }

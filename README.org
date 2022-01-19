@@ -1,0 +1,111 @@
+* effers
+** implementation details
+we could do something with proc macros maybe?
+where like, it scans through the tagged function, then it generates like a type?
+then that type you can call a function that provides it an effect runner
+
+#+begin_src rust
+  // the `Smth =>` part is optional
+  #[program(Smth => Printer(print as p), Logger(debug, info))]
+  fn smth(val: u8) -> u8 {
+      p("hey hi hello");
+
+      debug("this is a debug-level log");
+      info("this is a info-level log");
+
+      val + 3
+  }
+
+  fn main() {
+      // maybe smth like this?
+      let result: u8 = Smth
+          .add(IoPrinter)
+          .add(FileLogger)
+          .run(3);
+      let other_result: u8 = Smth
+          .add(IoPrinter)
+          .add(NetworkLogger {
+              credentials: "secret password".to_string()
+          })
+          .run(3);
+  }
+
+  trait Printer {
+      fn print();
+  }
+  trait Logger {
+      fn debug(&mut self);
+      fn info(&mut self);
+  }
+
+  struct IoPrinter;
+  impl Printer for IoPrinter {
+      fn print(s: &str) { println!(s) }
+  }
+
+  struct FileLogger;
+  impl Logger for FileLogger {
+      fn debug(&mut self) { ... }
+      fn info(&mut self) { ... }
+  }
+
+  struct NetworkLogger { credentials: String }
+  impl Logger for NetworkLogger {
+      fn debug(&mut self) { ... }
+      fn info(&mut self) { ... }
+  }
+#+end_src
+
+the macro will substitute the function to:
+
+#+begin_src rust
+  struct Smth;
+  struct SmthWithPrinter<P: Printer>(Smth, P);
+  struct SmthWithPrinterLogger<P: Printer, L: Logger>(Smth, P, L);
+  impl Smth {
+      fn add<P: Printer>(self, p: P) -> SmthWithPrinter<P> {
+          SmthWithPrinter(self, p)
+      }
+  }
+  impl<P: Printer> SmthWithPrinter<P> {
+      fn add<L: Logger>(self, l: L) -> SmthWithPrinterLogger<P, L> {
+          SmthWithPrinterLogger(self.0, self.1, l)
+      }
+  }
+  impl<P: Printer, L: Logger> SmthWithPrinterLogger<P, L> {
+    fn run(self, val: u8) -> u8 {
+        let l = self.2; // we probably don't do this though, just do an actual replacement
+
+        P::print("hey hi hello");
+
+        l.debug("this is a debug-level log");
+        l.info("this is a info-level log");
+
+        3
+    }
+  }
+#+end_src
+
+this could be rewritten to allow users to take any path when writing adding the effect handlers
+maybe not, cause we might want to have two of the same kind of effect, which would make us unable to tell them apart
+
+we can then make macros that make declaring an effect easier ig
+
+** questions
+*** DONE how to pass the logger into the function
+CLOSED: [2022-01-18 Tue 19:41]
+an option is to add it to the list of params
+*** DONE how to make it so the user can't call it directly
+CLOSED: [2022-01-18 Tue 19:41]
+solved, the function lives inside an impl block for a type
+*** TODO can we make it so it's uses ~IoPrinter::print~ instead of ~io_printer.print~?
+cause that would have better performance i think?
+cause it's just a static function and that's known at comp time
+
+with the other it does dynamic dispatch
+
+idk if we have access to that info on the macro
+*** TODO how to deal with multiple of the same type of effect
+i think it Just Works if we keep the order thing. we just have to make sure they define different names in the macro invocation, otherwise we won't know which one to use
+
+https://hackage.haskell.org/package/effet this uses tags
