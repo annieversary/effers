@@ -57,6 +57,7 @@ fn rewrite_item_into_struct(func: ItemFn, args: Args) -> TokenStream {
     let final_impl = final_impl(intermediate_structs.last().unwrap(), func, &args);
 
     let out = quote! {
+        #[derive(Clone, Copy)]
         struct #prog_name;
 
         #inters_tokens

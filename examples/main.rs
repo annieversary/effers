@@ -1,8 +1,11 @@
 use effers::program;
 
-#[program(Smth => Printer(print(&self) as p, check as check_printer), Logger(debug(&mut self), info(self)))]
-fn smth(val: u8) -> u8 {
-    if check_printer() {
+#[program(MyCoolProgram =>
+    Printer(print(&self) as p, available as printer_available),
+    Logger(debug(&mut self), info(self))
+)]
+fn my_program(val: u8) -> u8 {
+    if printer_available() {
         p("hey hi hello");
     }
 
@@ -19,9 +22,9 @@ fn other_program() {
 
 fn main() {
     // call the first program twice
-    let result: u8 = Smth.add(IoPrinter).add(FileLogger).run(3);
+    let result: u8 = MyCoolProgram.add(IoPrinter).add(FileLogger).run(3);
     assert_eq!(result, 6);
-    let other_result: u8 = Smth
+    let other_result: u8 = MyCoolProgram
         .add(IoPrinter)
         .add(NetworkLogger {
             credentials: "secret password".to_string(),
@@ -35,7 +38,7 @@ fn main() {
 
 trait Printer {
     fn print(&self, s: &str);
-    fn check() -> bool;
+    fn available() -> bool;
 }
 trait Logger {
     fn debug(&mut self, s: &str);
@@ -47,7 +50,7 @@ impl Printer for IoPrinter {
     fn print(&self, s: &str) {
         println!("{}", s)
     }
-    fn check() -> bool {
+    fn available() -> bool {
         true
     }
 }

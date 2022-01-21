@@ -1,5 +1,5 @@
 * effers
-effect handlers in rust
+ergonomic effect handlers in rust
 
 ** how to use
 *** defining effects
@@ -7,24 +7,30 @@ effects are defined with traits
 
 #+begin_src rust
 trait Printer {
-    fn print(&mut self, s: &str);
+    fn print(&self, s: &str);
+    fn available() -> bool;
 }
 trait Logger {
     fn debug(&mut self, s: &str);
-    fn info(&mut self, s: &str);
+    fn info(self, s: &str);
 }
 #+end_src
 
-all the trait functions (that are used in programs) must take ~&mut self~ as a parameter
+functions can take ~self~, ~&self~, ~&mut self~, or no ~self~ parameter. at this point ~self~ parameters with a specified type (like ~self: Box<Self>~) are not supported
 
 *** defining a program
 
-programs are defined as a normal function, with the added ~program~ attribute
+programs are defined as a normal function, with the added ~program~ attribute, which specifies (optional) a name for the program, and (required) the list of effects and corresponding functions that are used
 
 #+begin_src rust
-#[program(Smth => Printer(print as p), Logger(debug, info))]
-fn smth(val: u8) -> u8 {
-    p("hey hi hello");
+#[effers::program(MyCoolProgram =>
+    Printer(print(&self) as p, available as printer_available),
+    Logger(debug(&mut self), info(self))
+)]
+fn my_program(val: u8) -> u8 {
+    if printer_available() {
+        p("hey hi hello");
+    }
 
     debug("this is a debug-level log");
     info("this is a info-level log");
@@ -33,21 +39,46 @@ fn smth(val: u8) -> u8 {
 }
 #+end_src
 
-the first token (~Smth~) will be the name of the program. effects are listed after the ~=>~ token
+**** name
+
+the first token (~MyCoolProgram~) will be the name of the program. this is optional, and can be skipped:
+
+#+begin_src rust
+#[program(
+    Printer(print(&self) as p, available as printer_available),
+    Logger(debug(&mut self), info(self))
+)]
+#+end_src
+
+if skipped, the default name will be the program function's name (~my_program~) in PascalCase (~MyProgram~)
 
 **** listing effects
 effects are listed by writing the trait's name, followed by a parenthesized list of the functions that will be used
 
-functions can be given an alias using the ~as~ keyword
+***** listing effect functions
+
+due to limitations of proc-macros, it's unknown what kind of ~self~ parameter the function takes, if any, and so it has to be explicitly specified (if you have ideas on how to fix this, please open a PR!): here's how each type is specified:
+
+- ~fn print();~: ~print~
+- ~fn print(self);~: ~print(self)~
+- ~fn print(mut self);~: ~print(self)~
+- ~fn print(&self);~: ~print(&self)~
+- ~fn print(&mut self);~: ~print(&mut self)~
+
+***** effect function aliases
+functions can be given an alias using the ~as~ keyword (~print(&self) as p~) so that the function can be called by a different name inside the program
 
 *** defining effect handlers
-effect handlers are defined by declaring a struct, and implementing the trait on it
+effect handlers are defined by declaring a struct, and implementing the corresponding trait on it
 
 #+begin_src rust
 struct IoPrinter;
 impl Printer for IoPrinter {
-    fn print(&mut self, s: &str) {
+    fn print(&self, s: &str) {
         println!("{}", s)
+    }
+    fn available() -> bool {
+        true
     }
 }
 
@@ -56,88 +87,21 @@ impl Logger for FileLogger {
     fn debug(&mut self, s: &str) {
         println!("debug: {}", s)
     }
-    fn info(&mut self, s: &str) {
+    fn info(self, s: &str) {
         println!("info: {}", s)
     }
 }
 #+end_src
 
 *** running programs
-programs are run by providing the corresponding handlers in order, and finally calling the ~run~ method, providing it the required parameters
+programs are run by providing the corresponding handlers *in the order listed in the program definition*, and finally calling the ~run~ method, providing it the required parameters
 
 #+begin_src rust
-let result: u8 = Smth.add(IoPrinter).add(FileLogger).run(3);
+let result: u8 = MyCoolProgram.add(IoPrinter).add(FileLogger).run(3);
 assert_eq!(result, 6);
 #+end_src
 
-** full example
-#+begin_src rust
-use effers::program;
-
-#[program(Smth => Printer(print as p), Logger(debug, info))]
-fn smth(val: u8) -> u8 {
-    p("hey hi hello");
-
-    debug("this is a debug-level log");
-    info("this is a info-level log");
-
-    val + 3
-}
-
-fn main() {
-    // maybe smth like this?
-    let result: u8 = Smth.add(IoPrinter).add(FileLogger).run(3);
-    assert_eq!(result, 6);
-    let other_result: u8 = Smth
-        .add(IoPrinter)
-        .add(NetworkLogger {
-            credentials: "secret password".to_string(),
-        })
-        .run(8);
-    assert_eq!(other_result, 11);
-}
-
-// effects
-trait Printer {
-    fn print(&mut self, s: &str);
-}
-trait Logger {
-    fn debug(&mut self, s: &str);
-    fn info(&mut self, s: &str);
-}
-
-struct IoPrinter;
-impl Printer for IoPrinter {
-    fn print(&mut self, s: &str) {
-        println!("{}", s)
-    }
-}
-
-struct FileLogger;
-impl Logger for FileLogger {
-    fn debug(&mut self, s: &str) {
-        println!("debug: {}", s)
-    }
-    fn info(&mut self, s: &str) {
-        println!("info: {}", s)
-    }
-}
-
-struct NetworkLogger {
-    credentials: String,
-}
-impl Logger for NetworkLogger {
-    fn debug(&mut self, s: &str) {
-        println!(
-            "debug through network: {}; with password {}",
-            s, self.credentials
-        )
-    }
-    fn info(&mut self, s: &str) {
-        println!(
-            "info through network: {}; with password {}",
-            s, self.credentials
-        )
-    }
-}
-#+end_src
+** examples
+- [[./examples/main.rs][main: general use case]]
+- [[./examples/clone.rs][clone: how cloning and copying programs works]]
+- [[./examples/module.rs][module: effects from other modules are supported]]

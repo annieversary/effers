@@ -66,6 +66,7 @@ pub fn intermediate_structs(args: &Args, prog_name: &Ident) -> Vec<IntermediateS
                 let last_letter = letters.clone().last();
                 structs.push(IntermediateStruct::new(
                     quote! {
+                        #[derive(Clone, Copy)]
                         struct #id<#generics>(#last, #last_letter);
                     },
                     id,

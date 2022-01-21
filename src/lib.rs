@@ -33,7 +33,7 @@ mod test {
         }
     }
 
-    #[program(Printer(print as p))]
+    #[program(Printer(print(&self) as p))]
     fn ohter() {
         let _s = p("hey hi hello");
     }
