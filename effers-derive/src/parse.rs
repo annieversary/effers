@@ -1,7 +1,7 @@
 use syn::parse::{Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::token::Paren;
-use syn::{parenthesized, Ident, Path, Token};
+use syn::{parenthesized, Expr, ExprPath, ExprReference, Ident, Path, Token};
 
 #[derive(Debug)]
 pub struct Args {
@@ -21,7 +21,7 @@ pub struct Effect {
 pub struct EffectFunction {
     pub ident: Ident,
     pub alias: Option<Ident>,
-    pub mut_token: Option<Token![mut]>,
+    pub self_reference: Option<Expr>,
 }
 
 impl Parse for Args {
@@ -68,13 +68,28 @@ impl Parse for Effect {
 }
 impl Parse for EffectFunction {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut_token: Option<Token![mut]> = if input.peek(Token![mut]) {
-            input.parse()?
+        let ident = input.parse()?;
+
+        let self_reference: Option<Expr> = if input.peek(Paren) {
+            let content;
+            parenthesized!(content in input);
+
+            // &mut self
+            if content.peek(Token![&]) && content.peek2(Token![mut]) && content.peek3(Token![self])
+            {
+                Some(Expr::Reference(content.parse::<ExprReference>()?))
+            } else
+            // &self
+            if content.peek(Token![&]) && content.peek2(Token![self]) {
+                Some(Expr::Reference(content.parse::<ExprReference>()?))
+            } else if content.peek(Token![self]) {
+                Some(Expr::Path(content.parse::<ExprPath>()?))
+            } else {
+                None
+            }
         } else {
             None
         };
-
-        let ident = input.parse()?;
 
         let alias: Option<Ident> = if input.peek(Token![as]) {
             input.parse::<Token![as]>()?;
@@ -86,7 +101,7 @@ impl Parse for EffectFunction {
         Ok(EffectFunction {
             ident,
             alias,
-            mut_token,
+            self_reference,
         })
     }
 }

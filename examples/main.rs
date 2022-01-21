@@ -1,8 +1,10 @@
 use effers::program;
 
-#[program(Smth => Printer(print as p), Logger(mut debug, mut info))]
+#[program(Smth => Printer(print(&self) as p, check as check_printer), Logger(debug(&mut self), info(self)))]
 fn smth(val: u8) -> u8 {
-    p("hey hi hello");
+    if check_printer() {
+        p("hey hi hello");
+    }
 
     debug("this is a debug-level log");
     info("this is a info-level log");
@@ -10,7 +12,7 @@ fn smth(val: u8) -> u8 {
     val + 3
 }
 
-#[program(Printer(mut print as p))]
+#[program(Printer(print(&self) as p))]
 fn other_program() {
     p("hey hi hello");
 }
@@ -33,16 +35,20 @@ fn main() {
 
 trait Printer {
     fn print(&self, s: &str);
+    fn check() -> bool;
 }
 trait Logger {
     fn debug(&mut self, s: &str);
-    fn info(&mut self, s: &str);
+    fn info(self, s: &str);
 }
 
 struct IoPrinter;
 impl Printer for IoPrinter {
     fn print(&self, s: &str) {
         println!("{}", s)
+    }
+    fn check() -> bool {
+        true
     }
 }
 
@@ -51,7 +57,7 @@ impl Logger for FileLogger {
     fn debug(&mut self, s: &str) {
         println!("debug: {}", s)
     }
-    fn info(&mut self, s: &str) {
+    fn info(self, s: &str) {
         println!("info: {}", s)
     }
 }
@@ -66,7 +72,7 @@ impl Logger for NetworkLogger {
             s, self.credentials
         )
     }
-    fn info(&mut self, s: &str) {
+    fn info(self, s: &str) {
         println!(
             "info through network: {}; with password {}",
             s, self.credentials

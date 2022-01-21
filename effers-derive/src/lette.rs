@@ -1,26 +1,40 @@
+const LETTERS: &'static str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 #[derive(Clone, Copy)]
 pub struct LettersIter {
-    idx: u32,
+    idx: usize,
 }
 
 impl LettersIter {
     pub fn new() -> Self {
-        Self {
-            idx: 'A' as u32 - 1,
-        }
+        Self { idx: 0 }
     }
 }
 impl Iterator for LettersIter {
-    type Item = char;
+    type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for _ in 0..100 {
-            self.idx += 1;
-            if let Some(c) = char::from_u32(self.idx) {
-                return Some(c);
-            }
-        }
+        let l = LETTERS.chars().nth(self.idx % LETTERS.len()).unwrap();
+        let c = self.idx / LETTERS.len();
 
-        None
+        self.idx += 1;
+
+        Some(l.to_string().repeat(c + 1))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iter() {
+        let mut i = LettersIter::new();
+
+        assert_eq!(i.next(), Some("A".to_string()));
+        assert_eq!(i.next(), Some("B".to_string()));
+        assert_eq!(i.nth(23), Some("Z".to_string()));
+        assert_eq!(i.next(), Some("AA".to_string()));
+        assert_eq!(i.next(), Some("BB".to_string()));
     }
 }

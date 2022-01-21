@@ -4,12 +4,12 @@ pub use effers_derive::program;
 mod test {
     use super::*;
 
-    #[program(Smth => Printer(print as p), Logger(mut debug, mut info), inc::Incrementer(mut increment))]
+    #[program(Smth => Printer(print(&self) as p), Logger(debug(self), info(&mut self)), inc::Incrementer(increment))]
     fn smth(val: u8) -> u8 {
         let s = p("hey hi hello");
 
-        debug("this is a debug-level log");
         info("this is a info-level log");
+        debug("this is a debug-level log");
 
         let _s = p("hey hi hello");
 
@@ -24,16 +24,15 @@ mod test {
         fn print(&self, s: &str) -> &str;
     }
     trait Logger {
-        fn debug(&mut self, s: &str);
+        fn debug(self, s: &str);
         fn info(&mut self, s: &str);
     }
     mod inc {
         pub trait Incrementer {
-            fn increment(&mut self, v: u8) -> u8;
+            fn increment(v: u8) -> u8;
         }
     }
 
-    // TODO make nameless programs work
     #[program(Printer(print as p))]
     fn ohter() {
         let _s = p("hey hi hello");

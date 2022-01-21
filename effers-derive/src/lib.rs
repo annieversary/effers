@@ -1,9 +1,13 @@
 use convert_case::{Case, Casing};
+use lette::LettersIter;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::token::{Mut, SelfValue};
+use syn::token::{Dot, Mut, SelfValue};
 use syn::visit_mut::VisitMut;
-use syn::{parse_macro_input, Expr, ExprCall, FnArg, Ident, ItemFn, PathSegment, Receiver};
+use syn::{
+    parse_macro_input, Expr, ExprCall, ExprField, FnArg, Ident, Index, ItemFn, Member, PathSegment,
+    QSelf, Receiver,
+};
 
 mod parse;
 use parse::Args;
@@ -17,6 +21,7 @@ pub fn program(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
+    // dbg!(&item);
     let mut args = parse_macro_input!(attr as Args);
 
     if args.name.is_none() {
@@ -152,7 +157,7 @@ impl<'a> syn::visit_mut::VisitMut for FuncRewriter<'a> {
         // check if the function name is in args
         // if it is, replace it with the correct name
         if let Expr::Path(path) = &mut *node.func {
-            for (i, effect) in self.args.effects.iter().enumerate() {
+            for ((i, effect), l) in self.args.effects.iter().enumerate().zip(LettersIter::new()) {
                 for func in &effect.functions {
                     let ident = func.alias.clone().unwrap_or(func.ident.clone());
                     if path.path.is_ident(&ident) {
@@ -163,15 +168,58 @@ impl<'a> syn::visit_mut::VisitMut for FuncRewriter<'a> {
                             arguments: syn::PathArguments::None,
                         });
 
+                        let span = [Span::call_site()];
+
                         path.path = effect_path;
 
-                        // then change the parameters so the handler is the first
-                        // get the effect's index, and add the inverse num of `.0`s
-                        let idx = eff_len - (i + 1);
-                        let m = if func.mut_token.is_some() { "mut " } else { "" };
-                        let s = format!("&{}self{}.1", m, ".0".repeat(idx));
-                        let expr: Expr = syn::parse_str(&s).unwrap();
-                        node.args.insert(0, expr);
+                        // qualify the trait se we get
+                        // <A as Printer>::print
+                        // instead of Printer::print
+                        let ty: syn::Type = syn::parse_str(&l).unwrap();
+                        path.qself = Some(QSelf {
+                            lt_token: syn::token::Lt {
+                                spans: span.clone(),
+                            },
+                            ty: Box::new(ty),
+                            position: path.path.segments.len() - 1,
+                            as_token: Some(syn::token::As { span: span[0] }),
+                            gt_token: syn::token::Gt { spans: span },
+                        });
+
+                        // if the effect function takes a self, add it to the list of params
+                        if let Some(mut expr) = func.self_reference.clone() {
+                            // then change the parameters so the handler is the first
+                            // get the effect's index, and add the inverse num of `.0`s
+                            let idx = eff_len - (i + 1);
+
+                            for _ in 0..idx {
+                                expr = Expr::Field(ExprField {
+                                    attrs: vec![],
+                                    base: Box::new(expr),
+                                    dot_token: Dot {
+                                        spans: [Span::call_site()],
+                                    },
+                                    member: Member::Unnamed(Index {
+                                        index: 0,
+                                        span: Span::call_site(),
+                                    }),
+                                });
+                            }
+
+                            expr = Expr::Field(ExprField {
+                                attrs: vec![],
+                                base: Box::new(expr),
+                                dot_token: Dot {
+                                    spans: [Span::call_site()],
+                                },
+                                member: Member::Unnamed(Index {
+                                    index: 1,
+                                    span: Span::call_site(),
+                                }),
+                            });
+
+                            node.args.insert(0, expr);
+                        }
                     }
                 }
             }
