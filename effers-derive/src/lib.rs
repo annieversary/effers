@@ -1,13 +1,11 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::parse::{Parse, ParseStream, Result};
-use syn::punctuated::Punctuated;
 use syn::token::{Mut, SelfValue};
 use syn::visit_mut::VisitMut;
-use syn::{
-    parse_macro_input, Expr, ExprCall, FnArg, Ident, ItemFn, Path, PathSegment, Receiver, Token,
-    Type,
-};
+use syn::{parse_macro_input, Expr, ExprCall, FnArg, Ident, ItemFn, Path, PathSegment, Receiver};
+
+mod parse;
+use parse::Args;
 
 #[proc_macro_attribute]
 pub fn program(
@@ -31,93 +29,13 @@ pub fn program(
     proc_macro::TokenStream::from(out)
 }
 
+// TODO change this to change from camel_case to PascalCase
 fn first_letter_to_uppper_case(s1: String) -> String {
     let mut c = s1.chars();
     match c.next() {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
-}
-
-#[derive(Debug)]
-struct Args {
-    name: Option<Ident>,
-    effects: Vec<Effect>,
-}
-
-#[derive(Debug)]
-struct Effect {
-    name: Ident,
-    path: Path,
-    functions: Vec<EffectFunction>,
-}
-
-#[derive(Debug)]
-struct EffectFunction {
-    ident: Ident,
-    alias: Option<Ident>,
-}
-
-fn get_name_from_args(input: &mut ParseStream) -> Result<Ident> {
-    let name: Ident = input.parse()?;
-    input.parse::<Token![=>]>()?;
-    Ok(name)
-}
-impl Parse for Args {
-    fn parse(mut input: ParseStream) -> Result<Self> {
-        let name = get_name_from_args(&mut input).ok();
-
-        let effects: Vec<_> = Punctuated::<ExprCall, Token![,]>::parse_terminated(input)?
-            .into_iter()
-            .collect();
-
-        let effects: Vec<Effect> = effects
-            .into_iter()
-            .flat_map(|e| {
-                Some(Effect {
-                    name: name_from_expr_call(&e)?,
-                    path: if let Expr::Path(p) = &*e.func {
-                        Some(p.path.clone())
-                    } else {
-                        None
-                    }?,
-                    functions: effects_from_expr_call(&e),
-                })
-            })
-            .collect();
-
-        Ok(Args { name, effects })
-    }
-}
-
-fn name_from_expr_call(e: &ExprCall) -> Option<Ident> {
-    if let Expr::Path(e) = &*e.func {
-        Some(e.path.get_ident()?.clone())
-    } else {
-        None
-    }
-}
-
-/// returns the list of functions, with their optional alias
-fn effects_from_expr_call(e: &ExprCall) -> Vec<EffectFunction> {
-    e.args
-        .iter()
-        .cloned()
-        .flat_map(|p| match p {
-            Expr::Path(e) => Some(EffectFunction {
-                ident: e.path.get_ident().unwrap().clone(), // TODO remove this unwrap
-                alias: None,
-            }),
-            Expr::Cast(cast) => match (*cast.expr, *cast.ty) {
-                (Expr::Path(expr), Type::Path(ty)) => Some(EffectFunction {
-                    ident: expr.path.get_ident().unwrap().clone(),
-                    alias: Some(ty.path.get_ident()?.clone()),
-                }),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect()
 }
 
 #[derive(Clone, Copy)]
@@ -180,7 +98,7 @@ fn rewrite_item_into_struct(func: ItemFn, args: Args) -> TokenStream {
 struct IntermediateStruct {
     tokens: TokenStream,
     id: Ident,
-    traits: Vec<Ident>,
+    traits: Vec<Path>,
     letters: Vec<Ident>,
     generics: TokenStream,
 }
@@ -189,7 +107,7 @@ impl IntermediateStruct {
     fn new(
         tokens: TokenStream,
         id: Ident,
-        traits: Vec<Ident>,
+        traits: Vec<Path>,
         letters: Vec<Ident>,
         generics: TokenStream,
     ) -> Self {
@@ -212,7 +130,7 @@ fn intermediate_structs(args: &Args, prog_name: &Ident) -> Vec<IntermediateStruc
             |(mut structs, name, mut traits), eff| {
                 let name = format!("{}{}", &name, &eff.name);
 
-                traits.push(eff.name.clone());
+                traits.push(eff.path.clone());
 
                 // kinda messy
                 let letters = LettersIter::new()

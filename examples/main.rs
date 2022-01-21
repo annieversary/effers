@@ -10,8 +10,13 @@ fn smth(val: u8) -> u8 {
     val + 3
 }
 
+#[program(Printer(print as p))]
+fn other() {
+    p("hey hi hello");
+}
+
 fn main() {
-    // maybe smth like this?
+    // call the first program twice
     let result: u8 = Smth.add(IoPrinter).add(FileLogger).run(3);
     assert_eq!(result, 6);
     let other_result: u8 = Smth
@@ -21,6 +26,9 @@ fn main() {
         })
         .run(8);
     assert_eq!(other_result, 11);
+
+    // other program
+    Other.add(IoPrinter).run();
 }
 
 trait Printer {
