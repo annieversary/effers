@@ -3,10 +3,13 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::token::{Mut, SelfValue};
 use syn::visit_mut::VisitMut;
-use syn::{parse_macro_input, Expr, ExprCall, FnArg, Ident, ItemFn, Path, PathSegment, Receiver};
+use syn::{parse_macro_input, Expr, ExprCall, FnArg, Ident, ItemFn, PathSegment, Receiver};
 
 mod parse;
 use parse::Args;
+mod intermediate_structs;
+mod lette;
+use intermediate_structs::*;
 
 #[proc_macro_attribute]
 pub fn program(
@@ -28,33 +31,6 @@ pub fn program(
     };
 
     proc_macro::TokenStream::from(out)
-}
-
-#[derive(Clone, Copy)]
-struct LettersIter {
-    idx: u32,
-}
-
-impl LettersIter {
-    fn new() -> Self {
-        Self {
-            idx: 'A' as u32 - 1,
-        }
-    }
-}
-impl Iterator for LettersIter {
-    type Item = char;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        for _ in 0..100 {
-            self.idx += 1;
-            if let Some(c) = char::from_u32(self.idx) {
-                return Some(c);
-            }
-        }
-
-        None
-    }
 }
 
 /// takes in the function contents, and returns the structs n stuff
@@ -85,82 +61,6 @@ fn rewrite_item_into_struct(func: ItemFn, args: Args) -> TokenStream {
     };
 
     TokenStream::from(out)
-}
-
-struct IntermediateStruct {
-    tokens: TokenStream,
-    id: Ident,
-    traits: Vec<Path>,
-    letters: Vec<Ident>,
-    generics: TokenStream,
-}
-
-impl IntermediateStruct {
-    fn new(
-        tokens: TokenStream,
-        id: Ident,
-        traits: Vec<Path>,
-        letters: Vec<Ident>,
-        generics: TokenStream,
-    ) -> Self {
-        Self {
-            tokens,
-            id,
-            traits,
-            letters,
-            generics,
-        }
-    }
-}
-
-fn intermediate_structs(args: &Args, prog_name: &Ident) -> Vec<IntermediateStruct> {
-    let struct_with = format!("{}With", prog_name);
-    args.effects
-        .iter()
-        .fold(
-            (vec![], struct_with, vec![]),
-            |(mut structs, name, mut traits), eff| {
-                let name = format!("{}{}", &name, &eff.name);
-
-                traits.push(eff.path.clone());
-
-                // kinda messy
-                let letters = LettersIter::new()
-                    .take(traits.len())
-                    .map(|c| Ident::new(&c.to_string(), Span::call_site()));
-                let generics = traits
-                    .iter()
-                    .zip(letters.clone())
-                    .map(|(t, c)| quote!(#c: #t,))
-                    .collect::<TokenStream>();
-
-                let id = Ident::new(&name, Span::call_site());
-                let last = if let Some(&IntermediateStruct {
-                    ref id,
-                    ref letters,
-                    ..
-                }) = &structs.last()
-                {
-                    let gen = letters.iter().map(|l| quote!(#l,)).collect::<TokenStream>();
-                    quote!(#id<#gen>)
-                } else {
-                    quote!(#prog_name)
-                };
-                let last_letter = letters.clone().last();
-                structs.push(IntermediateStruct::new(
-                    quote! {
-                        struct #id<#generics>(#last, #last_letter);
-                    },
-                    id,
-                    traits.clone(),
-                    letters.collect::<Vec<_>>(),
-                    generics,
-                ));
-
-                (structs, name, traits)
-            },
-        )
-        .0
 }
 
 fn impls(prog_name: &Ident, intermediate_structs: &Vec<IntermediateStruct>) -> TokenStream {
@@ -268,7 +168,8 @@ impl<'a> syn::visit_mut::VisitMut for FuncRewriter<'a> {
                         // then change the parameters so the handler is the first
                         // get the effect's index, and add the inverse num of `.0`s
                         let idx = eff_len - (i + 1);
-                        let s = format!("&mut self{}.1", ".0".repeat(idx));
+                        let m = if func.mut_token.is_some() { "mut " } else { "" };
+                        let s = format!("&{}self{}.1", m, ".0".repeat(idx));
                         let expr: Expr = syn::parse_str(&s).unwrap();
                         node.args.insert(0, expr);
                     }

@@ -1,6 +1,6 @@
 use effers::program;
 
-#[program(Smth => Printer(print as p), Logger(debug, info))]
+#[program(Smth => Printer(print as p), Logger(mut debug, mut info))]
 fn smth(val: u8) -> u8 {
     p("hey hi hello");
 
@@ -10,7 +10,7 @@ fn smth(val: u8) -> u8 {
     val + 3
 }
 
-#[program(Printer(print as p))]
+#[program(Printer(mut print as p))]
 fn other_program() {
     p("hey hi hello");
 }
@@ -32,7 +32,7 @@ fn main() {
 }
 
 trait Printer {
-    fn print(&mut self, s: &str);
+    fn print(&self, s: &str);
 }
 trait Logger {
     fn debug(&mut self, s: &str);
@@ -41,7 +41,7 @@ trait Logger {
 
 struct IoPrinter;
 impl Printer for IoPrinter {
-    fn print(&mut self, s: &str) {
+    fn print(&self, s: &str) {
         println!("{}", s)
     }
 }

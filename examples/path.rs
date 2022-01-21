@@ -10,12 +10,12 @@ fn prog(val: u8) -> u8 {
 
 mod inc {
     pub trait Incrementer {
-        fn increment(&mut self, v: u8) -> u8;
+        fn increment(&self, v: u8) -> u8;
     }
 
     pub struct TestInc;
     impl Incrementer for TestInc {
-        fn increment(&mut self, v: u8) -> u8 {
+        fn increment(&self, v: u8) -> u8 {
             v + 3
         }
     }

@@ -4,21 +4,21 @@ pub use effers_derive::program;
 mod test {
     use super::*;
 
-    // #[program(Smth => Printer(print as p), Logger(debug, info), inc::Incrementer(increment))]
-    // fn smth(val: u8) -> u8 {
-    //     let s = p("hey hi hello");
+    #[program(Smth => Printer(print as p), Logger(mut debug, mut info), inc::Incrementer(mut increment))]
+    fn smth(val: u8) -> u8 {
+        let s = p("hey hi hello");
 
-    //     debug("this is a debug-level log");
-    //     info("this is a info-level log");
+        debug("this is a debug-level log");
+        info("this is a info-level log");
 
-    //     let _s = p("hey hi hello");
+        let _s = p("hey hi hello");
 
-    //     dbg!(s);
+        dbg!(s);
 
-    //     let x = increment(val);
-    //     let y = increment(x);
-    //     x + y
-    // }
+        let x = increment(val);
+        let y = increment(x);
+        x + y
+    }
 
     trait Printer {
         fn print(&self, s: &str) -> &str;
