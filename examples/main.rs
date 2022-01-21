@@ -11,7 +11,7 @@ fn smth(val: u8) -> u8 {
 }
 
 #[program(Printer(print as p))]
-fn other() {
+fn other_program() {
     p("hey hi hello");
 }
 
@@ -28,7 +28,7 @@ fn main() {
     assert_eq!(other_result, 11);
 
     // other program
-    Other.add(IoPrinter).run();
+    OtherProgram.add(IoPrinter).run();
 }
 
 trait Printer {

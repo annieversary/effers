@@ -1,3 +1,4 @@
+use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::token::{Mut, SelfValue};
@@ -16,7 +17,7 @@ pub fn program(
     let mut args = parse_macro_input!(attr as Args);
 
     if args.name.is_none() {
-        let i = first_letter_to_uppper_case(item.sig.ident.to_string());
+        let i = item.sig.ident.to_string().to_case(Case::Pascal);
         args.name = Some(Ident::new(&i, Span::call_site()));
     }
 
@@ -27,15 +28,6 @@ pub fn program(
     };
 
     proc_macro::TokenStream::from(out)
-}
-
-// TODO change this to change from camel_case to PascalCase
-fn first_letter_to_uppper_case(s1: String) -> String {
-    let mut c = s1.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
 }
 
 #[derive(Clone, Copy)]
