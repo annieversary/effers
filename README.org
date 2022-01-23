@@ -105,3 +105,101 @@ assert_eq!(result, 6);
 - [[./examples/main.rs][main: general use case]]
 - [[./examples/clone.rs][clone: how cloning and copying programs works]]
 - [[./examples/module.rs][module: effects from other modules are supported]]
+
+** performance
+running programs in effers is *really* fast. i'll first explain the reasoning why, and then i'll show benchmarks in case you don't believe me :)
+
+*** explanation
+the macro replaces every call to an effect function to be a call to the corresponding trait, and since it uses generics, the type is known at compile time and therefore there is no dynamic dispatch. for example, the program in the [[./examples/module.rs][module example]] ends up being the following:
+
+#+begin_src rust
+impl<A: inc::Incrementer> ProgWithIncrementer<A> {
+    fn run(mut self, val: u8) -> u8 {
+        let x = <A as inc::Incrementer>::increment(&self.1, val);
+        let y = <A as inc::Incrementer>::increment(&self.1, x);
+        x + y
+    }
+}
+#+end_src
+
+note: this is literally the output of ~cargo expand~, you can try it yourself!
+
+when running the program with ~Prog.add(inc::TestInc).run(1)~, rust fully knows at compile time that the ~increment~ effect function is from the trait ~Implementer~, and it's being called on ~TestInc~. since all of this is known at compile time, rust can perform all normal optimizations, and the cost of using effers is practically none
+
+*** benchmarks
+note: i do not know how to properly benchmark libraries, so if you think what i did is not correct, please feel free to open an issue/PR. i followed the example showcased in [[https://www.youtube.com/watch?v=0jI-AlWEwYI][Alexis King's Effects for Less talk]], which /should/ properly test the actual effect system's cost on programs. i recommend you look at that talk if you haven't already, as it's highly informative, and it explains why this benchmark makes sense. the tldw is that when benchmarking effect systems, we want to know the performance cost of using the effect system, we don't care about benchmarking the effects themselves, and so we need simple effects so that the cost of the system is appreciable in comparison
+
+the test is run with input of 20 and 20000
+
+the benchmark compares an implementation using =effers=:
+
+#+begin_src rust
+#[program(State(get(&self), put(&mut self)))]
+fn prog() -> u32 {
+    loop {
+        let n = get();
+        if n <= 0 {
+            return n;
+        } else {
+            put(n - 1);
+        }
+    }
+}
+#+end_src
+
+with a plain-rust implementation:
+
+#+begin_src rust
+fn prog(mut n: u32) {
+    let r = loop {
+        if n <= 0 {
+            break n;
+        } else {
+            n = n - 1;
+        }
+    };
+    assert_eq!(0, r);
+}
+#+end_src
+
+the following are the results:
+
+#+begin_src
+state: effers: 20       time:   [319.18 ps 319.78 ps 320.34 ps]
+                        change: [-0.9133% -0.6671% -0.4224%] (p = 0.00 < 0.05)
+                        Change within noise threshold.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+
+state: effers: 20000    time:   [320.23 ps 320.64 ps 321.02 ps]
+                        change: [-0.0515% +0.2343% +0.5306%] (p = 0.11 > 0.05)
+                        No change in performance detected.
+Found 18 outliers among 100 measurements (18.00%)
+  13 (13.00%) low mild
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
+state: no effect system: 20
+                        time:   [319.94 ps 321.22 ps 323.39 ps]
+                        change: [-0.5255% -0.1001% +0.3816%] (p = 0.69 > 0.05)
+                        No change in performance detected.
+Found 12 outliers among 100 measurements (12.00%)
+  8 (8.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
+state: no effect system: 20000
+                        time:   [319.41 ps 319.85 ps 320.27 ps]
+                        change: [-2.4698% -1.9813% -1.5456%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+#+end_src
+
+now, i might be wrong about this, but it seems that there is no extra cost incurred by using effers :)
+
+im pretty sure that that is wrong, and that the compiler is doing some extra optimizations i am not aware of. again, if you know how to improve this benchmark, please let me know
+
+*** building a program
+
+there might be some performance cost in *building* a program before running it, since it uses the builder pattern and a bunch of functions have to be called, but the benchmarks above show it's not an appreciable difference

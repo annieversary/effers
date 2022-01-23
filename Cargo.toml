@@ -8,3 +8,10 @@ members = ["effers-derive"]
 
 [dependencies]
 effers-derive = { path = "./effers-derive" }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "my_benchmark"
+harness = false
